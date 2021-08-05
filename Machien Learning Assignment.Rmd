@@ -1,0 +1,90 @@
+---
+title: "Machine Learning"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+Load libraries.
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+library(ggthemes)
+```
+
+Load the data.
+```{r}
+setwd("/Users/adamsarissky/Desktop/Data")
+trainDATA<- read.csv("pml-training.csv")
+```
+
+Some data manipulations. I removed X because the decision tree used it as a predictor
+and I don't really want to use the number of observations as a predictor. Then I create data partition and split the dataset 90/10 into a test and a train datsaset to increase the accuracy of my model as when I split it into 70/30 it was bellow 50%. 
+```{r}
+set.seed(12345)
+inTrain  <- createDataPartition(trainDATA$classe, p=0.9, list=FALSE)
+TrainSet <- trainDATA[inTrain, ]
+TestSet  <- trainDATA[-inTrain, ]
+AllNA    <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+TrainSet <- TrainSet[, AllNA==FALSE]
+TestSet  <- TestSet[, AllNA==FALSE]
+```
+
+Some further transformations include removing variables that are close to 0 and removing variables that are only used to identify people etc. as they could further impact the model. Using these predictors is not advised as when applied to data from different people the model would be less accurate. 
+```{r}
+set.seed(12345)
+NZV <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -NZV]
+TestSet  <- TestSet[, -NZV]
+TrainSet <- TrainSet[, -(1:4)]
+TestSet  <- TestSet[, -(1:4)]
+```
+
+## Building the model.
+I decided to use decision trees as random forest doesn't work with missing variables and even though I removed them it still had some kind of a problem with the data so I decided to use decision trees instead. 
+```{r}
+set.seed(12345)
+modFit <- train(classe~., data = TrainSet, method = "rpart")
+```
+
+Let's take a look at the decision tree.
+```{r}
+fancyRpartPlot(modFit$finalModel)
+```
+
+Creating prediction and variable for cross validation. 
+```{r}
+pred <- predict(modFit, newdata = TestSet)
+TestSet$PredRight <- pred==TestSet$classe
+```
+
+Now let's measure accuracy. Here's a plot that shows how accuratly we predicted the classe variable. 
+```{r}
+ggplot(TestSet, aes(roll_belt, pitch_belt, color = PredRight)) + geom_point (
+  )+ theme_economist()
+```
+
+Doesn't seem incredibly accurate. Let's check if it's at least close to 50%.
+
+```{r}
+summary(TestSet$PredRight)
+```
+
+Well, it's not incredibly accurate but it's my first attempt!
+
+Applying the algorithm to the test dataset provided
+
+```{r}
+setwd("/Users/adamsarissky/Desktop/Data")
+test.data <- read.csv("pml-testing.csv")
+pred2 <- predict(modFit, newdata = test.data)
+test.data$classe <- pred2
+ggplot(TestSet, aes(roll_belt, pitch_belt, color = classe)) + geom_point (
+)+ theme_economist()
+```
+
+
